@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Taskflow – Smart task manager with priorities, due dates, focus mode and more."/>
+  <title>Taskflow – Your Smart Todo Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="static/style.css"/>
+</head>
+<body>
+
+  <!-- Starfield -->
+  <div class="stars-layer stars-sm"></div>
+  <div class="stars-layer stars-md"></div>
+  <div class="stars-layer stars-lg"></div>
+
+  <!-- Nebula -->
+  <div class="nebula nebula-1"></div>
+  <div class="nebula nebula-2"></div>
+  <div class="nebula nebula-3"></div>
+  <div class="nebula nebula-4"></div>
+
+  <!-- Focus Mode overlay -->
+  <div id="focus-overlay" class="focus-overlay hidden"></div>
+
+  <div class="app-wrapper">
+
+    <!-- ── HEADER ── -->
+    <header class="header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <span class="logo-text">Taskflow</span>
+      </div>
+
+      <div class="header-right">
+        <div class="header-stats" id="header-stats">
+          <div class="stat-pill" id="total-count">0 tasks</div>
+          <div class="stat-pill done" id="done-count">0 done</div>
+        </div>
+        <button class="focus-btn" id="focus-btn" onclick="toggleFocusMode()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          <span>Focus</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Focus Mode Banner -->
+    <div id="focus-banner" class="focus-banner hidden">
+      <span class="focus-icon">🎯</span>
+      <div>
+        <p class="focus-title">Focus Mode Active</p>
+        <p class="focus-sub">Only active tasks shown · No distractions</p>
+      </div>
+      <button class="exit-focus-btn" onclick="toggleFocusMode()">Exit Focus</button>
+    </div>
+
+    <main>
+
+      <!-- ── ADD TASK SECTION ── -->
+      <section class="add-section" id="add-section">
+        <h1 class="hero-title">What's on your<br/><span class="gradient-text">mind today?</span></h1>
+        <p class="hero-sub">Add tasks, check them off, and stay in control.</p>
+
+        <!-- Input Row -->
+        <div class="input-wrapper">
+          <div class="input-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </div>
+          <input type="text" id="taskInput" class="task-input" placeholder="Add a new task..." autocomplete="off" maxlength="120"/>
+          <button id="addBtn" class="add-btn" onclick="addTask()">
+            <span>Add Task</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="filter-tabs" id="filter-tabs">
+          <button class="tab active" id="tab-all"       onclick="filterTasks('all')">All</button>
+          <button class="tab"        id="tab-active"    onclick="filterTasks('active')">Active</button>
+          <button class="tab"        id="tab-completed" onclick="filterTasks('completed')">Completed</button>
+        </div>
+      </section>
+
+      <!-- ── TASKS LIST ── -->
+      <section class="tasks-section">
+        <div id="taskList" class="tasks-container"></div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="empty-state hidden">
+          <div class="rocket-wrap">
+            <div class="rocket-glow"></div>
+            <span class="rocket-emoji">🚀</span>
+          </div>
+          <p class="empty-title" id="empty-msg">Start small. One task is enough 🚀</p>
+        </div>
+      </section>
+
+      <!-- ── PROGRESS SECTION ── -->
+      <section id="progress-section" class="progress-section hidden">
+        <div class="progress-header">
+          <div class="progress-left">
+            <span class="progress-label">Overall Progress</span>
+            <span class="progress-summary" id="progress-summary">0 of 0 tasks done</span>
+          </div>
+          <span class="progress-pct" id="progress-pct">0%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progress-bar"></div>
+        </div>
+        <p class="progress-message" id="progress-message">Let's start 🚀</p>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- ✅ Load as ES module so supabase.js import works -->
+  <script type="module" src="static/app.js"></script>
+</body>
+</html>
