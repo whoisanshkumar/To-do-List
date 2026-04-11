@@ -10,7 +10,11 @@
      due_date    timestamp  nullable
      user_id     uuid       (references auth.users.id)
 
-   RLS: DISABLED  →  anon key can read/write freely
+   RLS: Policies must be set in Supabase dashboard:
+     - SELECT: auth.uid() = user_id
+     - INSERT: auth.uid() = user_id
+     - UPDATE: auth.uid() = user_id
+     - DELETE: auth.uid() = user_id
    ============================================================ */
 
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -26,9 +30,17 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 // AUTH
 // ═══════════════════════════════════════════════════════════
 
-/** Sign up a new user */
+/** Sign up a new user.
+ *  emailRedirectTo ensures the confirmation link works on Vercel, not localhost.
+ */
 export async function signUp(email, password) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: window.location.origin,
+    },
+  });
   if (error) throw error;
   return data;
 }
@@ -93,16 +105,23 @@ export async function fetchTasks(userId) {
 }
 
 
-/** Add a new task */
+/** Add a new task.
+ *  user_id is ALWAYS attached so RLS policies can filter correctly.
+ */
 export async function addTask({ title, priority = "medium", dueDate = null, userId = null }) {
+  if (!userId) {
+    console.warn("addTask: no userId provided – task will not be tied to any user");
+  }
+
   const payload = {
     task:      title,
     priority:  priority,
     due_date:  dueDate || null,
     completed: false,
+    user_id:   userId,   // always set (null if not logged in)
   };
 
-  if (userId) payload.user_id = userId;
+  console.log("addTask payload:", payload);
 
   const { data, error } = await supabase
     .from("tasks")
@@ -111,16 +130,18 @@ export async function addTask({ title, priority = "medium", dueDate = null, user
     .single();
 
   if (error) {
-    console.error("addTask error:", error.message);
+    console.error("addTask error:", error.message, error.details, error.hint);
     throw error;
   }
 
+  console.log("addTask saved:", data);
   return normalise(data);
 }
 
 
 /** Toggle the completed state of a task */
 export async function toggleTask(id, completed) {
+  console.log("toggleTask:", id, "→", completed);
   const { data, error } = await supabase
     .from("tasks")
     .update({ completed })
@@ -129,16 +150,18 @@ export async function toggleTask(id, completed) {
     .single();
 
   if (error) {
-    console.error("toggleTask error:", error.message);
+    console.error("toggleTask error:", error.message, error.details, error.hint);
     throw error;
   }
 
+  console.log("toggleTask result:", data);
   return normalise(data);
 }
 
 
 /** Update a task's title (and optionally other fields) */
 export async function updateTask(id, fields) {
+  console.log("updateTask:", id, fields);
   const { data, error } = await supabase
     .from("tasks")
     .update(fields)
@@ -147,26 +170,42 @@ export async function updateTask(id, fields) {
     .single();
 
   if (error) {
-    console.error("updateTask error:", error.message);
+    console.error("updateTask error:", error.message, error.details, error.hint);
     throw error;
   }
 
+  console.log("updateTask result:", data);
   return normalise(data);
 }
 
 
-/** Delete a task */
+/** Delete a task.
+ *  IMPORTANT: Supabase silently ignores deletes when:
+ *   - RLS is ON and no DELETE policy exists, OR
+ *   - the row's user_id doesn't match auth.uid()
+ *  We use .select() after delete to verify the row was actually removed.
+ */
 export async function deleteTask(id) {
-  const { error } = await supabase
+  console.log("deleteTask: attempting to delete id =", id);
+
+  const { data, error } = await supabase
     .from("tasks")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .select();   // returns the deleted rows; empty array = nothing was deleted (RLS blocked it)
 
   if (error) {
-    console.error("deleteTask error:", error.message);
+    console.error("deleteTask error:", error.message, error.details, error.hint);
     throw error;
   }
 
+  if (!data || data.length === 0) {
+    // RLS blocked the delete silently — surface it as a proper error
+    console.error("deleteTask: 0 rows deleted — check RLS policies or row ownership");
+    throw new Error("Permission denied: could not delete task. Check Supabase RLS policies.");
+  }
+
+  console.log("deleteTask: successfully deleted", data);
   return true;
 }
 
@@ -175,12 +214,15 @@ export async function deleteTask(id) {
 // HELPERS
 // ═══════════════════════════════════════════════════════════
 
-/** Map DB row → UI object */
+/** Map DB row → UI object.
+ *  DB column is "task"; UI uses "title". We expose both for compatibility.
+ */
 function normalise(row) {
+  const taskText = row.task || row.title || "";
   return {
     id:         row.id,
-    title:      row.task,
-    task:       row.task,
+    title:      taskText,   // UI reads this
+    task:       taskText,   // kept for update payload compatibility
     created_at: formatTimestamp(row.created_at),
     completed:  row.completed ?? false,
     priority:   row.priority  ?? "medium",

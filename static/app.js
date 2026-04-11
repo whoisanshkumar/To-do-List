@@ -66,27 +66,44 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // Listen for auth state changes (handles session persistence)
-  onAuthStateChange(async session => {
+  // ── Auth state management ────────────────────────────────
+  // Strategy: use onAuthStateChange as the single source of truth.
+  // getSession() is called once to bootstrap on page load.
+  // A guard flag prevents double loadTasks() if both fire in quick succession.
+  let sessionBootstrapped = false;
+
+  onAuthStateChange(async (session) => {
+    console.log("[auth] state change:", session?.user?.email ?? "logged out");
     if (session?.user) {
       currentUser = session.user;
       showApp();
+      if (!sessionBootstrapped) {
+        // getSession() will handle the first load below
+        // but if it already ran and set the flag, skip
+      }
+      // Always load/refresh tasks on any auth change
       await loadTasks();
     } else {
       currentUser = null;
+      allTasks = [];
       showAuthOverlay();
     }
+    sessionBootstrapped = true;
   });
 
-  // Check existing session on load
+  // Bootstrap: check existing session on page load
+  console.log("[init] checking existing session...");
   const session = await getSession();
   if (session?.user) {
+    console.log("[init] session found:", session.user.email);
     currentUser = session.user;
     showApp();
     await loadTasks();
   } else {
+    console.log("[init] no session, showing auth overlay");
     showAuthOverlay();
   }
+  sessionBootstrapped = true;
 });
 
 
@@ -280,6 +297,11 @@ window.addTask = async function() {
     return;
   }
 
+  if (!currentUser) {
+    showToast("⚠️ You must be logged in to add tasks");
+    return;
+  }
+
   // Optimistic add
   const tempId = "tmp-" + Date.now();
   const optimistic = {
@@ -299,9 +321,9 @@ window.addTask = async function() {
       title,
       priority,
       dueDate,
-      userId: currentUser?.id || null,
+      userId: currentUser.id,   // always pass the real user id
     });
-    // Replace temp
+    // Replace temp with real row from DB
     const idx = allTasks.findIndex(t => t.id === tempId);
     if (idx !== -1) allTasks[idx] = saved;
     renderTasks();
@@ -310,7 +332,7 @@ window.addTask = async function() {
     console.error("addTask:", err);
     allTasks = allTasks.filter(t => t.id !== tempId);
     renderTasks();
-    showToast("❌ Failed to add task");
+    showToast("❌ Failed to add task: " + (err.message || "Unknown error"));
   }
 };
 
@@ -379,6 +401,7 @@ window.saveEdit = async function(id) {
   const newTitle = input.value.trim();
   if (!newTitle) { showToast("✏️ Title can't be empty"); return; }
 
+  // Optimistic update in local state
   const idx = allTasks.findIndex(t => t.id === id);
   if (idx !== -1) {
     allTasks[idx].title = newTitle;
@@ -387,6 +410,7 @@ window.saveEdit = async function(id) {
   renderTasks();
 
   try {
+    // DB column is "task", not "title" — must use the correct column name
     const updated = await sbUpdate(id, { task: newTitle });
     const i = allTasks.findIndex(t => t.id === id);
     if (i !== -1) allTasks[i] = { ...allTasks[i], ...updated };
@@ -394,7 +418,9 @@ window.saveEdit = async function(id) {
     showToast("✏️ Task updated!");
   } catch (err) {
     console.error("saveEdit:", err);
-    showToast("❌ Failed to update task");
+    showToast("❌ Failed to update task: " + (err.message || "Unknown error"));
+    // Revert on failure
+    await loadTasks();
   }
 };
 
@@ -413,6 +439,7 @@ window.closeConfirm = function() {
 };
 
 async function executeDelete(id) {
+  console.log("[delete] starting for id:", id);
   const card = document.getElementById("task-" + id);
   if (card) card.classList.add("removing");
 
@@ -422,12 +449,13 @@ async function executeDelete(id) {
       allTasks = allTasks.filter(t => t.id !== id);
       renderTasks();
       showToast("🗑️ Task deleted");
+      console.log("[delete] success for id:", id);
     } catch (err) {
-      console.error("deleteTask:", err);
-      // Undo animation
+      console.error("[delete] failed for id:", id, err.message);
+      // Undo animation so card reappears
       const c = document.getElementById("task-" + id);
       if (c) c.classList.remove("removing");
-      showToast("❌ Failed to delete task");
+      showToast("❌ " + (err.message || "Failed to delete task"));
     }
   }, 280);
 }
